@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import 'dart:async';
-
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-
-import 'menu_item.dart';
+import 'menu_item.dart' as menu_item;
 
 /// Whether or not the menu item is a divider, as a boolean. If true, no other
 /// The name of the plugin's platform channel.
@@ -34,9 +32,7 @@ const String _kMenuSetMethod = 'Menubar.SetMenu';
 /// The argument to this method must be the ID of the selected menu item, as
 /// provided in the kIdKey field in the kMenuSetMethod call.
 const String _kMenuItemSelectedCallbackMethod = 'Menubar.SelectedCallback';
-
 // Keys for the map representations of menus sent to kMenuSetMethod.
-
 /// The ID of the menu item, as an integer. If present, this indicates that the
 /// menu item should trigger a kMenuItemSelectedCallbackMethod call when
 /// selected.
@@ -76,7 +72,6 @@ const String _kChildrenKey = 'children';
 /// Whether or not the menu item is a divider, as a boolean. If true, no other
 /// keys will be present.
 const String _kDividerKey = 'isDivider';
-
 // Values for _kShortcutKeyModifiers.
 const int _shortcutModifierMeta = 1 << 0;
 const int _shortcutModifierShift = 1 << 1;
@@ -108,12 +103,11 @@ class MenuChannel {
   MenuChannel._() {
     _platformChannel.setMethodCallHandler(_callbackHandler);
   }
-
   final MethodChannel _platformChannel = const MethodChannel(_kMenuChannelName);
 
   /// Map from unique identifiers assigned by this class to the callbacks for
   /// those menu items.
-  final Map<int, MenuSelectedCallback> _selectionCallbacks = {};
+  final Map<int, menu_item.MenuSelectedCallback> _selectionCallbacks = {};
 
   /// The ID to use the next time a menu item needs an ID assigned.
   int _nextMenuItemId = 1;
@@ -133,7 +127,7 @@ class MenuChannel {
   /// How exactly this is handled is subject to platform interpretation.
   /// For instance, special menus that are handled entirely on the native
   /// side might be added to the provided menus.
-  Future<Null> setMenu(List<Submenu> menus) async {
+  Future<Null> setMenu(List<menu_item.Submenu> menus) async {
     try {
       _updateInProgress = true;
       await _platformChannel.invokeMethod(
@@ -150,26 +144,25 @@ class MenuChannel {
   /// As a side-effect, repopulates _selectionCallbacks with a mapping from
   /// the IDs assigned to any menu item with a selection handler to the
   /// callback that should be triggered.
-  List<dynamic> _channelRepresentationForMenus(List<Submenu> menus) {
+  List<dynamic> _channelRepresentationForMenus(List<menu_item.Submenu> menus) {
     _selectionCallbacks.clear();
     _nextMenuItemId = 1;
-
     return menus.map(_channelRepresentationForMenuItem).toList();
   }
 
   /// Returns a representation of [item] suitable for passing over the
   /// platform channel to the native plugin.
   Map<String, dynamic> _channelRepresentationForMenuItem(
-      AbstractMenuItem item) {
+      menu_item.AbstractMenuItem item) {
     final representation = <String, dynamic>{};
-    if (item is MenuDivider) {
+    if (item is menu_item.MenuDivider) {
       representation[_kDividerKey] = true;
     } else {
       representation[_kLabelKey] = item.label;
-      if (item is Submenu) {
+      if (item is menu_item.Submenu) {
         representation[_kChildrenKey] =
             _channelRepresentationForMenu(item.children);
-      } else if (item is MenuItem) {
+      } else if (item is menu_item.MenuItem) {
         final handler = item.onClicked;
         if (handler != null) {
           representation[_kIdKey] = _storeMenuCallback(handler);
@@ -191,12 +184,13 @@ class MenuChannel {
 
   /// Returns the representation of [menu] suitable for passing over the
   /// platform channel to the native plugin.
-  List<dynamic> _channelRepresentationForMenu(List<AbstractMenuItem> menu) {
+  List<dynamic> _channelRepresentationForMenu(
+      List<menu_item.AbstractMenuItem> menu) {
     final menuItemRepresentations = [];
     // Dividers are only allowed after non-divider items (see ApplicationMenu).
     var skipNextDivider = true;
     for (final menuItem in menu) {
-      final isDivider = menuItem is MenuDivider;
+      final isDivider = menuItem is menu_item.MenuDivider;
       if (isDivider && skipNextDivider) {
         continue;
       }
@@ -231,9 +225,8 @@ class MenuChannel {
           throw ArgumentError('Invalid menu item shortcut: $shortcut\n'
               'Menu items must have exactly one non-modifier key.');
         }
-
         if (key.keyLabel.isNotEmpty) {
-          channelRepresentation[_kShortcutKeyEquivalent] = key.keyLabel.toLowerCase();
+          channelRepresentation[_kShortcutKeyEquivalent] = key.keyLabel;
         } else {
           final specialKey = _shortcutSpecialKeyValues[key];
           if (specialKey == null) {
@@ -245,7 +238,6 @@ class MenuChannel {
         hasNonModifierKey = true;
       }
     }
-
     if (!hasNonModifierKey) {
       throw ArgumentError('Invalid menu item shortcut: $shortcut\n'
           'Menu items must have exactly one non-modifier key.');
@@ -258,7 +250,7 @@ class MenuChannel {
   ///
   /// The returned ID should be attached to the menu so that the native plugin
   /// can identify the menu item selected in the callback.
-  int _storeMenuCallback(MenuSelectedCallback callback) {
+  int _storeMenuCallback(menu_item.MenuSelectedCallback callback) {
     final id = _nextMenuItemId++;
     _selectionCallbacks[id] = callback;
     return id;
